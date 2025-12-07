@@ -38,55 +38,47 @@ def main():
 
 	df = pd.read_csv(csv_path)
 
-	# Accept several possible video id column names
 	video_cols = [c for c in df.columns if c.lower() in ('videoid', 'video_id', 'video', 'videoid')]
 	if video_cols:
 		video_col = video_cols[0]
 	else:
-		# fallback: try to find a column that contains 'video'
 		candidates = [c for c in df.columns if 'video' in c.lower()]
 		if candidates:
 			video_col = candidates[0]
 		else:
 			print('Could not find a video id column in CSV. Columns available:')
-			print(list(df.columns))
-			sys.exit(1)
+		print('Could not find a video id column in CSV. Columns available:')
+		print(list(df.columns))
+		sys.exit(1)
 
-	# rating column
 	rating_cols = [c for c in df.columns if c.lower() in ('rating', 'score')]
-	if rating_cols:
 		rating_col = rating_cols[0]
 	else:
+		print('Could not find a rating column in CSV. Columns available:')
 		print('Could not find a rating column in CSV. Columns available:')
 		print(list(df.columns))
 		sys.exit(1)
 
-	# prepare outdir
+	os.makedirs(outdir, exist_ok=True)
 	os.makedirs(outdir, exist_ok=True)
 
-	# Coerce ratings to numeric when possible
 	df['_rating_numeric'] = pd.to_numeric(df[rating_col], errors='coerce')
-	df['_rating_is_numeric'] = ~df['_rating_numeric'].isna()
+	videos = df[video_col].unique()
 
 	videos = df[video_col].unique()
 
-	# Sort videos by embedded numeric id if present (e.g. Video01 -> 1)
-	def _extract_num(s):
-		m = re.search(r"(\d+)", str(s))
-		return int(m.group(1)) if m else float('inf')
+	def _extract_num(s):1)) if m else float('inf')
 
 	video_list = sorted(list(videos), key=lambda v: (_extract_num(v), str(v).lower()))
 	print(f'Found {len(video_list)} unique videos; writing combined plot to {outdir}/')
 
-	# Determine user column (if any)
+	video_list = sorted(list(videos), key=lambda v: (_extract_num(v), str(v).lower()))
+	print(f'Found {len(video_list)} unique videos; writing combined plot to {outdir}/')
+
 	user_cols = [c for c in df.columns if c.lower() in ('uuid', 'user', 'user_id', 'participant', 'participant_id')]
 	user_col = user_cols[0] if user_cols else None
 
-	# Collect counts per video
-	counts_per_video = []
-	non_numeric_counts = []
-	for vid in video_list:
-		sub = df[df[video_col] == vid].copy()
+	counts_per_video = []l] == vid].copy()
 		numeric = sub[sub['_rating_is_numeric']]
 		counts = numeric['_rating_numeric'].value_counts().sort_index()
 		counts_per_video.append(counts)
@@ -96,19 +88,17 @@ def main():
 		print('No videos found in CSV.')
 		print('Done.')
 		return
+	if not video_list:
+		print('No videos found in CSV.')
+		print('Done.')
+		return
 
-	# Build and print summary table
-	summary = []
-	for i, vid in enumerate(video_list):
+	summary = []meric > 0:
+			# weighted mean from counts (handles non-consecutive rating values)
 		counts = counts_per_video[i]
 		total_numeric = int(counts.sum()) if not counts.empty else 0
 		if total_numeric > 0:
-			# weighted mean from counts (handles non-consecutive rating values)
-			idx = counts.index.astype(float).to_numpy()
-			vals = counts.values.astype(float)
-			mean_rating = float((idx * vals).sum() / vals.sum())
-			mean_rating = round(mean_rating, 3)
-			rating_counts_str = ', '.join(f"{int(k)}:{v}" for k, v in counts.items())
+			idx = counts.index.astype(float).to_numpy()}" for k, v in counts.items())
 		else:
 			mean_rating = float('nan')
 			rating_counts_str = ''
@@ -118,16 +108,14 @@ def main():
 		# If a user id was provided, try to extract the user's numeric rating for this video
 		user_val = None
 		if args.user and user_col:
+		non_numeric = non_numeric_counts[i]
+
+		user_val = None last numeric answer by timestamp if available
+		if args.user and user_col:
 			try:
 				user_sub = df[(df[video_col] == vid) & (df[user_col] == args.user)].copy()
 				if not user_sub.empty:
-					# prefer the last numeric answer by timestamp if available
 					if 'timestamp' in user_sub.columns:
-						user_sub['__ts'] = pd.to_datetime(user_sub['timestamp'], errors='coerce')
-						user_numeric = user_sub[user_sub['_rating_is_numeric']].sort_values('__ts')
-					else:
-						user_numeric = user_sub[user_sub['_rating_is_numeric']]
-
 					if not user_numeric.empty:
 						user_val = float(user_numeric['_rating_numeric'].iloc[-1])
 			except Exception:
@@ -136,11 +124,10 @@ def main():
 		# Determine expected value: 1 for Ai, 5 for Real (case-insensitive)
 		name_lower = str(vid).lower()
 		if 'ai' in name_lower:
-			expected = 1
-		elif 'real' in name_lower:
-			expected = 5
-		else:
-			expected = ''
+			except Exception:
+				user_val = None
+
+		name_lower = str(vid).lower()
 
 		summary.append({
 			'video': vid,
@@ -159,65 +146,53 @@ def main():
 		summary_df = summary_df.sort_values('video')
 
 		# Convert expected to numeric where possible, then compute absolute difference using means
-		summary_df['expected_num'] = pd.to_numeric(summary_df['expected'], errors='coerce')
-		# abs difference computed from mean_rating vs expected
-		summary_df['abs_diff'] = (summary_df['mean_rating'] - summary_df['expected_num']).abs().round(3)
-
+	try:
+		summary_df = pd.DataFrame(summary)
+		summary_df = summary_df.sort_values('video')
 		# Select and print table
 		if args.user:
 			# compute per-video abs diff for the user (NaN if user didn't answer)
-			summary_df['user_rating_num'] = pd.to_numeric(summary_df['user_rating'], errors='coerce')
-			summary_df['user_abs_diff'] = (summary_df['user_rating_num'] - summary_df['expected_num']).abs().round(3)
-			# exclude mean_rating from the user-focused table
+		summary_df['expected_num'] = pd.to_numeric(summary_df['expected'], errors='coerce')
+		summary_df['abs_diff'] = (summary_df['mean_rating'] - summary_df['expected_num']).abs().round(3)
 			out_df = summary_df[['video', 'user_rating_num', 'expected', 'user_abs_diff']]
 			out_df = out_df.rename(columns={'user_rating_num': 'user_rating', 'user_abs_diff': 'abs_diff_user'})
+		if args.user:
+			summary_df['user_rating_num'] = pd.to_numeric(summary_df['user_rating'], errors='coerce')
+			out_df = summary_df[['video', 'mean_rating', 'expected', 'abs_diff']]
+			summary_df['user_abs_diff'] = (summary_df['user_rating_num'] - summary_df['expected_num']).abs().round(3)
+			out_df = summary_df[['video', 'user_rating_num', 'expected', 'user_abs_diff']]
+		# If a user was specified, compute comparison between user and all people
+		if args.user:
 			print('\nSummary table (user answers):')
 			print(out_df.to_string(index=False))
 		else:
-			# Select only the requested columns: video, mean_rating, expected, abs_diff
 			out_df = summary_df[['video', 'mean_rating', 'expected', 'abs_diff']]
-			print('\nSummary table (means):')
-			print(out_df.to_string(index=False))
-
-		# If a user was specified, compute comparison between user and all people
-		if args.user:
-			# total using mean ratings only (all people)
-			mean_diff = (summary_df['mean_rating'] - summary_df['expected_num']).abs().sum(skipna=True)
-			try:
-				mean_diff = float(mean_diff)
-			except Exception:
 				mean_diff = None
 
 			# total for the user: use user's rating where present, otherwise fall back to mean (same as displayed)
-			# we stored 'user_rating' and 'mean_rating'
-			if 'user_rating' in summary_df.columns:
-				user_series = summary_df['user_rating'].copy()
-				# replace missing user ratings with mean_rating for fair comparison (as requested)
+		if args.user:
+			mean_diff = (summary_df['mean_rating'] - summary_df['expected_num']).abs().sum(skipna=True)
 				user_series = user_series.fillna(summary_df['mean_rating'])
 				user_diff = (user_series - summary_df['expected_num']).abs().sum(skipna=True)
 				try:
 					user_diff = float(user_diff)
-				except Exception:
-					user_diff = None
-			else:
-				user_diff = None
+			except Exception:
+				mean_diff = None
 
-			# Print results
+			if 'user_rating' in summary_df.columns:
 			if mean_diff is not None:
-				print(f"Total abs_diff (all people, means): {round(mean_diff,3)}")
-			else:
-				print("Total abs_diff (all people, means): N/A")
-
+			if 'user_rating' in summary_df.columns:
+				user_series = summary_df['user_rating'].copy()
+				user_series = user_series.fillna(summary_df['mean_rating'])
 			if user_diff is not None:
 				print(f"Total abs_diff (user {args.user}): {round(user_diff,3)}")
 			else:
 				print(f"Total abs_diff (user {args.user}): N/A")
 
-			if (mean_diff is not None) and (user_diff is not None):
-				diff_val = user_diff - mean_diff
-				print(f"Difference (user - all): {round(diff_val,3)}")
-	except Exception as e:
-		print('Failed to build/print summary table:', e)
+			else:
+				user_diff = None
+
+			if mean_diff is not None:nt summary table:', e)
 
 	# Layout: choose number of columns, compute rows
 	cols = 4
@@ -231,17 +206,15 @@ def main():
 	for i, vid in enumerate(video_list):
 		ax = axes_flat[i]
 		counts = counts_per_video[i]
-		if not counts.empty:
-			x_vals = [str(v) for v in counts.index.tolist()]
-			y_vals = counts.values.tolist()
-			ax.bar(x_vals, y_vals, color='tab:blue')
-			ax.set_xlabel('rating')
-			ax.set_ylabel('count')
-			# force integer y-axis ticks (step 1) since counts are integers
-			ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-			# ensure y-axis starts at 0
-			ax.set_ylim(bottom=0)
-		else:
+	except Exception as e:
+		print('Failed to build/print summary table:', e)
+
+	cols = 4
+	n = len(video_list)
+	rows = math.ceil(n / cols)
+
+	fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, max(2.5 * rows, 4)))
+	axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
 			ax.text(0.5, 0.5, 'No numeric ratings', ha='center', va='center')
 
 		# show short title and note if any non-numeric were omitted
@@ -257,18 +230,18 @@ def main():
 
 	out_path = os.path.join(outdir, 'all_distributions.png')
 	try:
-		fig.savefig(out_path)
-		print(f'Wrote {out_path}')
-	except Exception as e:
-		print(f'Failed to save combined plot: {e}')
+		else:
+			ax.text(0.5, 0.5, 'No numeric ratings', ha='center', va='center')
 
-	if args.show:
-		plt.show()
-	plt.close(fig)
+		note = f' ({non_numeric_counts[i]} non-numeric omitted)' if non_numeric_counts[i] > 0 else ''
+		ax.set_title(f'{vid}{note}', fontsize=9)
 
+	for j in range(n, len(axes_flat)):
 	print('Done.')
 
 
-if __name__ == '__main__':
-	main()
+	fig.suptitle(f'Rating distributions — {n} videos')
+	fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
+	out_path = os.path.join(outdir, 'all_distributions.png')
+	try:
