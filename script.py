@@ -74,6 +74,7 @@ def main():
 
 	user_cols = [c for c in df.columns if c.lower() in ('uuid', 'user', 'user_id', 'participant', 'participant_id')]
 	user_col = user_cols[0] if user_cols else None
+	participant_count = int(df[user_col].dropna().nunique()) if user_col else None
 
 	counts_per_video = []
 	non_numeric_counts = []
@@ -211,7 +212,10 @@ def main():
 	for j in range(n, len(axes_flat)):
 		axes_flat[j].axis('off')
 
-	fig.suptitle(f'Rating distributions — {n} videos')
+	title = f'Rating distributions — {n} videos'
+	if participant_count is not None:
+		title += f' — {participant_count} participants'
+	fig.suptitle(title)
 	fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 	out_path = os.path.join(outdir, 'all_distributions.png')
