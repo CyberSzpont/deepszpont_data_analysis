@@ -67,9 +67,13 @@ def main():
 
 	def _extract_num(s):
 		m = re.search(r'\d+', str(s))
-		return float(m.group(0)) if m else float('inf')
+		return float(m.group(0)) if m else None
 
-	video_list = sorted(list(videos), key=lambda v: (_extract_num(v), str(v).lower()))
+	# Videos with numbers first, then those without
+	videos_with_num = [v for v in videos if _extract_num(v) is not None]
+	videos_without_num = [v for v in videos if _extract_num(v) is None]
+	video_list = sorted(videos_with_num, key=lambda v: (_extract_num(v), str(v).lower())) + \
+				 sorted(videos_without_num, key=lambda v: str(v).lower())
 	print(f'Found {len(video_list)} unique videos; writing combined plot to {outdir}/')
 
 	user_cols = [c for c in df.columns if c.lower() in ('uuid', 'user', 'user_id', 'participant', 'participant_id')]
@@ -228,6 +232,7 @@ def main():
 		print(f'Failed to save plot: {e}')
 
 	if args.show:
+		print('Showing plot interactively...')
 		plt.show()
 
 	print('Done.')
