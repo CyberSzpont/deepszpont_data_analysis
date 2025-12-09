@@ -201,10 +201,12 @@ def main():
 		if counts.empty:
 			ax.text(0.5, 0.5, 'No numeric ratings', ha='center', va='center')
 		else:
-			ax.bar(counts.index.astype(str), counts.values, color='steelblue', edgecolor='black')
+			ax.bar(counts.index.astype(float), counts.values, color='steelblue', edgecolor='black')
 			ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 			ax.set_xlabel('Rating', fontsize=8)
 			ax.set_ylabel('Count', fontsize=8)
+			ax.set_xticks(range(1, 6))
+			ax.set_xlim(0.4, 5.6)
 
 		note = f' ({non_numeric_counts[i]} non-numeric omitted)' if non_numeric_counts[i] > 0 else ''
 		ax.set_title(f'{vid}{note}', fontsize=9)
