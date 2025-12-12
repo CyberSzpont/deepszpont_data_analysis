@@ -188,6 +188,13 @@ def main():
 				print(f"Total abs_diff (user {args.user}): {round(user_diff,3)}")
 			else:
 				print(f"Total abs_diff (user {args.user}): N/A")
+		else:
+			# Print total abs_diff for all videos
+			total_abs_diff = (summary_df['abs_diff']).sum()
+			if total_abs_diff is not None:
+				print(f"Total abs_diff (all videos): {round(total_abs_diff,3)}")
+			else:
+				print("Total abs_diff (all videos): N/A")
 
 	except Exception as e:
 		print('Failed to build/print summary table:', e)
