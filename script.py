@@ -7,6 +7,7 @@ import sys
 import math
 from collections import Counter
 import re
+import numpy as np
 
 def safe_filename(s: str) -> str:
 	return "".join(c if c.isalnum() or c in (' ', '.', '_', '-') else '_' for c in s).strip().replace(' ', '_')
@@ -17,6 +18,7 @@ def main():
 	parser.add_argument('--outdir', '-o', default='plots', help='Output directory for images')
 	parser.add_argument('--show', action='store_true', help='Show plots interactively (requires GUI backend)')
 	parser.add_argument('--user', '-u', help='User id (uuid) to display that user\'s answers; if provided, uses the user\'s rating for each video when available, otherwise uses the overall average')
+	parser.add_argument('--videodir', '-v', default='videos', help='Directory containing source videos for thumbnail overlays')
 	args = parser.parse_args()
 
 	csv_path = args.csv
@@ -26,9 +28,10 @@ def main():
 		import pandas as pd
 		import matplotlib.pyplot as plt
 		from matplotlib.ticker import MaxNLocator
+		import imageio.v3 as iio
 	except Exception as e:
 		print('Missing required packages: please install with:')
-		print('  python -m pip install pandas matplotlib')
+		print('  python -m pip install -r requirements.txt')
 		print(f'Detailed error: {e}')
 		sys.exit(1)
 
@@ -64,6 +67,39 @@ def main():
 	df['_rating_numeric'] = pd.to_numeric(df[rating_col], errors='coerce')
 	df['_rating_is_numeric'] = df[rating_col].notna() & (pd.to_numeric(df[rating_col], errors='coerce').notna())
 	videos = df[video_col].unique()
+
+	def _load_first_frame(video_name):
+		"""Return the first frame for a video or None if unavailable."""
+		candidates = []
+		video_str = str(video_name)
+		candidates.append(os.path.join(args.videodir, video_str))
+		root, ext = os.path.splitext(video_str)
+		if not ext:
+			candidates.append(os.path.join(args.videodir, f"{video_str}.mp4"))
+
+		for path in candidates:
+			if not os.path.exists(path):
+				continue
+			try:
+				frame = iio.imread(path, index=0)
+				if frame.ndim == 2:  # grayscale
+					frame = np.stack([frame] * 3, axis=-1)
+				if frame.shape[-1] == 4:  # drop alpha if present
+					frame = frame[..., :3]
+				return frame
+			except Exception as err:
+				print(f'Warning: failed to load first frame for {video_str} ({path}): {err}')
+				return None
+		return None
+
+	first_frames = {}
+	if args.videodir and os.path.isdir(args.videodir):
+		for vid in videos:
+			frame = _load_first_frame(vid)
+			if frame is not None:
+				first_frames[str(vid)] = frame
+	else:
+		print(f'Video directory not found or unreadable: {args.videodir}')
 
 	def _extract_num(s):
 		m = re.search(r'\d+', str(s))
@@ -203,33 +239,50 @@ def main():
 	n = len(video_list)
 	rows = math.ceil(n / cols)
 
-	fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, max(2.5 * rows, 4)))
-	axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
+	import matplotlib.gridspec as gridspec
+	fig = plt.figure(figsize=(cols * 5.0, max(2.6 * rows, 4)))
+	gs = gridspec.GridSpec(rows, cols * 2, figure=fig, width_ratios=[1.4, 1.6] * cols, wspace=0.35, hspace=0.65)
 
 	for i, vid in enumerate(video_list):
-		ax = axes_flat[i]
+		row = i // cols
+		col = i % cols
+		thumb_ax = fig.add_subplot(gs[row, col * 2])
+		bar_ax = fig.add_subplot(gs[row, col * 2 + 1])
+
+		frame = first_frames.get(str(vid))
+		if frame is not None:
+			thumb_ax.imshow(frame)
+			thumb_ax.set_xticks([])
+			thumb_ax.set_yticks([])
+		else:
+			thumb_ax.axis('off')
+
 		counts = counts_per_video[i]
 		if counts.empty:
-			ax.text(0.5, 0.5, 'No numeric ratings', ha='center', va='center')
+			bar_ax.text(0.5, 0.5, 'No numeric ratings', ha='center', va='center')
 		else:
-			ax.bar(counts.index.astype(float), counts.values, color='steelblue', edgecolor='black')
-			ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-			ax.set_xlabel('Rating', fontsize=8)
-			ax.set_ylabel('Count', fontsize=8)
-			ax.set_xticks(range(1, 6))
-			ax.set_xlim(0.4, 5.6)
+			bar_ax.bar(counts.index.astype(float), counts.values, color='steelblue', edgecolor='black')
+			bar_ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+			bar_ax.set_xlabel('Rating', fontsize=8)
+			bar_ax.set_ylabel('Count', fontsize=8)
+			bar_ax.set_xticks(range(1, 6))
+			bar_ax.set_xlim(0.4, 5.6)
 
 		note = f' ({non_numeric_counts[i]} non-numeric omitted)' if non_numeric_counts[i] > 0 else ''
-		ax.set_title(f'{vid}{note}', fontsize=9)
+		bar_ax.set_title(f'{vid}{note}', fontsize=9)
 
-	for j in range(n, len(axes_flat)):
-		axes_flat[j].axis('off')
+	# Hide any unused grid cells (when videos do not fill the grid)
+	for j in range(n, rows * cols):
+		row = j // cols
+		col = j % cols
+		for offset in (0, 1):
+			ax = fig.add_subplot(gs[row, col * 2 + offset])
+			ax.axis('off')
 
 	title = f'Rating distributions — {n} videos'
 	if participant_count is not None:
 		title += f' — {participant_count} participants'
 	fig.suptitle(title)
-	fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 	out_path = os.path.join(outdir, 'all_distributions.png')
 	try:
